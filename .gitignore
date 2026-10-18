@@ -1,0 +1,38 @@
+# Secrets
+.env
+*.key
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+build/
+dist/
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+
+# Runtime data (never commit student notes, indexes or the database)
+data/uploads/*
+data/indexes/*
+!data/uploads/.gitkeep
+!data/indexes/.gitkeep
+*.db
+*.sqlite3
+*.faiss
+
+# Models live on the Hugging Face Hub, not in git
+models/
+.cache/
+
+# Generated evaluation output
+evaluation/reports/*
+!evaluation/reports/.gitkeep
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/

@@ -1,0 +1,6 @@
+# Heavy ML dependencies (RAG pipeline and local models). Not used in CI.
+-r requirements.txt
+sentence-transformers>=3.0
+faiss-cpu>=1.8
+transformers>=4.44
+torch>=2.3
