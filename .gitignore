@@ -25,7 +25,7 @@ data/indexes/*
 *.faiss
 
 # Models live on the Hugging Face Hub, not in git
-models/
+/models/
 .cache/
 
 # Generated evaluation output
