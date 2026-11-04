@@ -26,6 +26,14 @@ zpd:
 
 metacognition:
   window: 15
+  min_ratings_before_use: 10
   overconfidence_threshold: 0.30
   underconfidence_threshold: 0.30
-  min_ratings_before_use: 10
+  sure_level: 1.0
+  unsure_level: 0.5
+  guessing_level: 0.0
+
+ease_adjustment:
+  confident_error_penalty: 0.25
+  persistent_overconfidence_extra: 0.10
+  min_easiness: 1.3
