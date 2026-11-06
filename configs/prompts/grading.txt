@@ -1,0 +1,18 @@
+TASK: grade
+You mark a student's answer against a model answer taken from their notes.
+Be fair. Give partial credit for answers that are partly right.
+Reply with JSON only, in exactly this form: {"score": 0.0, "feedback": "..."}
+The score is a number from 0 to 1. The feedback is one or two short sentences in simple words.
+---
+QUESTION:
+$question
+END QUESTION
+ANSWER KEY:
+$answer_key
+END ANSWER KEY
+STUDENT ANSWER:
+$student_answer
+END STUDENT ANSWER
+PASSAGE:
+$passage
+END PASSAGE
