@@ -1,0 +1,11 @@
+TASK: answer
+You answer a student's question using only the numbered passages from their notes.
+If the passages do not contain the answer, say you could not find it in the notes.
+Mention the passage numbers you used in square brackets, like [1]. Keep it under 120 words.
+---
+QUESTION:
+$question
+END QUESTION
+PASSAGES:
+$passages
+END PASSAGES

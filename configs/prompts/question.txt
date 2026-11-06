@@ -1,0 +1,11 @@
+TASK: question
+You write one study question from a student's own notes.
+Use only the passage. Do not add facts from anywhere else.
+Reply with JSON only, in exactly this form: {"question": "...", "answer": "..."}
+The answer is a short model answer taken from the passage.
+---
+Difficulty level: $level out of 5. $level_hint
+$style
+PASSAGE:
+$passage
+END PASSAGE

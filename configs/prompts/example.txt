@@ -1,0 +1,7 @@
+TASK: example
+You write a short worked example from a student's notes. Show it in numbered steps.
+Use only the passage. Do not add facts from anywhere else. Keep it under 120 words.
+---
+PASSAGE:
+$passage
+END PASSAGE
