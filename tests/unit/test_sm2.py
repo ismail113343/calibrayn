@@ -60,7 +60,6 @@ class TestPassingReviews:
         assert run_reviews([4, 4, 4]).interval_days == 15
 
     def test_interval_uses_easiness_from_before_the_review(self):
-        # two grade-5 reviews lift easiness to 2.7, and the third review should use that 2.7
         assert run_reviews([5, 5, 5]).interval_days == 16
 
     def test_intervals_keep_growing_for_a_strong_learner(self):

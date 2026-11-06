@@ -1,14 +1,3 @@
-"""Zone of Proximal Development tracking.
-
-Implements the ZPD Tracker from sections 2.2 and 3.2 of the proposal: a rolling average of
-recent answer accuracy that is used to keep question difficulty inside a productive band,
-"stretch but don't snap". Too many right answers means the material is too easy. Too few means
-it is too hard.
-
-The core of it is two pure functions, assess() and suggest_level(). ZPDTracker wraps them with
-the small amount of state the orchestrator needs to carry between questions.
-"""
-
 from collections import deque
 from collections.abc import Sequence
 from dataclasses import dataclass
@@ -24,8 +13,6 @@ class Zone(Enum):
 
 @dataclass(frozen=True)
 class ZPDConfig:
-    """Settings for the tracker. See docs/decisions/0001-zpd-target-band.md for the reasoning."""
-
     window: int = 10
     target_low: float = 0.60
     target_high: float = 0.85
@@ -72,11 +59,6 @@ def _check_level(level: int, config: ZPDConfig) -> None:
 
 
 def assess(recent_scores: Sequence[float], config: ZPDConfig = DEFAULT_CONFIG) -> ZPDStatus:
-    """Place the student relative to the zone.
-
-    Scores run from 0.0 (wrong) to 1.0 (fully correct), oldest first, so partial credit from
-    the grader is allowed. Only the latest `window` scores are used.
-    """
     recent = list(recent_scores)[-config.window :]
     for score in recent:
         _check_score(score)
@@ -95,7 +77,6 @@ def assess(recent_scores: Sequence[float], config: ZPDConfig = DEFAULT_CONFIG) -
 
 
 def suggest_level(status: ZPDStatus, current_level: int, config: ZPDConfig = DEFAULT_CONFIG) -> int:
-    """Difficulty to use next: one step up when too easy, one step down when too hard."""
     _check_level(current_level, config)
     if status.zone is Zone.TOO_EASY:
         return min(current_level + 1, config.max_level)
@@ -105,13 +86,6 @@ def suggest_level(status: ZPDStatus, current_level: int, config: ZPDConfig = DEF
 
 
 class ZPDTracker:
-    """Holds the recent scores and the current difficulty level for one learner.
-
-    Scores only mean something relative to the level they were earned at, so changing level
-    clears the history. After a change the tracker needs `min_attempts` fresh scores before it
-    will suggest another move, which also stops it from bouncing between levels.
-    """
-
     def __init__(
         self,
         config: ZPDConfig = DEFAULT_CONFIG,
@@ -131,7 +105,6 @@ class ZPDTracker:
 
     @property
     def scores(self) -> tuple[float, ...]:
-        """Current history, oldest first. Handy for saving the tracker and restoring it later."""
         return tuple(self._scores)
 
     def record(self, score: float) -> None:
@@ -151,7 +124,6 @@ class ZPDTracker:
             self._scores.clear()
 
     def follow_suggestion(self) -> int:
-        """Move to the suggested level, if it differs, and return the level now in force."""
         self.set_level(self.suggested_level())
         return self._level
 
