@@ -1,4 +1,5 @@
 import json
+import sys
 import threading
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from types import SimpleNamespace
@@ -6,11 +7,13 @@ from types import SimpleNamespace
 import pytest
 
 from calibrayn.llm.base import LLMError, PrivacyError, require_text
+from calibrayn.llm.discovery import chat_models, installed_ollama_models, pick_model
 from calibrayn.llm.factory import build_client
 from calibrayn.llm.hf import HuggingFaceInferenceClient, HuggingFaceLocalClient
 from calibrayn.llm.http import (
     OllamaClient,
     OpenAICompatibleClient,
+    get_json,
     is_local_url,
     post_json,
 )
@@ -297,6 +300,18 @@ class QuietServer(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def do_GET(self):
+        if self.path == "/api/tags":
+            body = json.dumps(
+                {"models": [{"name": "llama3.2:latest"}, {"name": "nomic-embed-text:latest"}]}
+            ).encode()
+            self.send_response(200)
+            self.end_headers()
+            self.wfile.write(body)
+            return
+        self.send_response(404)
+        self.end_headers()
+
     def log_message(self, *args):
         pass
 
@@ -377,3 +392,160 @@ class TestFactory:
     def test_an_unknown_provider_lists_the_choices(self):
         with pytest.raises(LLMError, match="mock, hf_local"):
             build_client(settings(llm_provider="magic"))
+
+
+class TestGetJson:
+    def test_it_reads_json_from_a_real_server(self, server_url):
+        reply = get_json(f"{server_url}/api/tags", timeout=5)
+        assert [entry["name"] for entry in reply["models"]] == [
+            "llama3.2:latest",
+            "nomic-embed-text:latest",
+        ]
+
+    def test_an_error_status_becomes_an_llm_error(self, server_url):
+        with pytest.raises(LLMError, match="404"):
+            get_json(f"{server_url}/missing", timeout=5)
+
+    def test_an_unreachable_server_becomes_an_llm_error(self):
+        with pytest.raises(LLMError):
+            get_json("http://127.0.0.1:9/none", timeout=1)
+
+
+class TestDiscovery:
+    def test_models_are_listed_from_a_real_server(self, server_url):
+        assert installed_ollama_models(server_url) == ["llama3.2:latest", "nomic-embed-text:latest"]
+
+    def test_a_server_that_is_not_running_gives_an_empty_list(self):
+        assert installed_ollama_models("http://127.0.0.1:9") == []
+
+    def test_a_reply_in_the_wrong_shape_gives_an_empty_list(self):
+        assert installed_ollama_models("http://x", fetch=lambda url, timeout: {"models": 5}) == []
+        assert installed_ollama_models("http://x", fetch=lambda url, timeout: ["a"]) == []
+
+    def test_entries_without_a_name_are_skipped(self):
+        reply = {"models": [{"name": "a:1"}, {"id": 2}, "text", {"name": 5}]}
+        assert installed_ollama_models("http://x", fetch=lambda url, timeout: reply) == ["a:1"]
+
+    def test_the_address_is_cleaned_before_asking(self):
+        seen = []
+        installed_ollama_models("http://x:1/", fetch=lambda url, timeout: seen.append(url) or {})
+        assert seen == ["http://x:1/api/tags"]
+
+    def test_embedding_models_are_not_chat_models(self):
+        assert chat_models(["llama3.2:latest", "nomic-embed-text"]) == ["llama3.2:latest"]
+
+    def test_the_wanted_model_is_chosen_when_installed(self):
+        assert pick_model("qwen2.5:3b", ["llama3.2:latest", "qwen2.5:3b"]) == "qwen2.5:3b"
+
+    def test_a_model_of_the_same_family_is_the_next_choice(self):
+        assert pick_model("llama3.2", ["mistral:7b", "llama3.2:latest"]) == "llama3.2:latest"
+
+    def test_otherwise_the_first_chat_model_is_used(self):
+        assert pick_model("qwen2.5:3b", ["nomic-embed-text", "mistral:7b"]) == "mistral:7b"
+
+    def test_nothing_is_chosen_when_nothing_is_installed(self):
+        assert pick_model("llama3.2", []) is None
+        assert pick_model("llama3.2", ["nomic-embed-text"]) is None
+
+
+class TestAutoProvider:
+    def test_a_running_local_model_is_used(self):
+        chosen = settings(llm_provider="auto")
+        client = build_client(chosen, discover=lambda url: ["llama3.2:latest"])
+        assert isinstance(client, OllamaClient)
+        assert client.name == "ollama:llama3.2:latest"
+
+    def test_the_configured_model_wins_when_it_is_installed(self):
+        chosen = settings(llm_provider="auto", ollama_model="qwen2.5:3b")
+        client = build_client(chosen, discover=lambda url: ["llama3.2:latest", "qwen2.5:3b"])
+        assert client.name == "ollama:qwen2.5:3b"
+
+    def test_the_offline_model_is_the_fallback(self):
+        client = build_client(settings(llm_provider="auto"), discover=lambda url: [])
+        assert isinstance(client, MockClient)
+
+    def test_embedding_only_installs_do_not_count(self):
+        client = build_client(
+            settings(llm_provider="auto"), discover=lambda url: ["nomic-embed-text"]
+        )
+        assert isinstance(client, MockClient)
+
+    def test_the_address_from_the_settings_is_asked(self):
+        asked = []
+        chosen = settings(llm_provider="auto", ollama_base_url="http://localhost:9999")
+        build_client(chosen, discover=lambda url: asked.append(url) or [])
+        assert asked == ["http://localhost:9999"]
+
+    def test_a_remote_server_is_still_blocked_in_local_mode(self):
+        chosen = settings(llm_provider="auto", ollama_base_url="http://192.168.1.5:11434")
+        with pytest.raises(PrivacyError):
+            build_client(chosen, discover=lambda url: ["llama3.2:latest"])
+
+
+class TestHuggingFaceLocalToken:
+    def test_the_token_reaches_the_pipeline(self, monkeypatch):
+        seen = {}
+
+        def fake_pipeline(task, model, token=None):
+            seen.update(task=task, model=model, token=token)
+            return lambda messages, max_new_tokens, temperature, do_sample: [
+                {"generated_text": [{"role": "assistant", "content": "Done."}]}
+            ]
+
+        monkeypatch.setitem(sys.modules, "transformers", SimpleNamespace(pipeline=fake_pipeline))
+        client = HuggingFaceLocalClient("org/model", token="secret")
+        assert client.complete("system", "prompt") == "Done."
+        assert seen == {"task": "text-generation", "model": "org/model", "token": "secret"}
+
+    def test_an_empty_token_is_passed_as_none(self, monkeypatch):
+        seen = {}
+
+        def fake_pipeline(task, model, token=None):
+            seen["token"] = token
+            return lambda messages, max_new_tokens, temperature, do_sample: [
+                {"generated_text": [{"role": "assistant", "content": "Done."}]}
+            ]
+
+        monkeypatch.setitem(sys.modules, "transformers", SimpleNamespace(pipeline=fake_pipeline))
+        HuggingFaceLocalClient("org/model").complete("s", "p")
+        assert seen["token"] is None
+
+    def test_a_missing_package_gives_a_clear_error(self, monkeypatch):
+        monkeypatch.setitem(sys.modules, "transformers", None)
+        with pytest.raises(LLMError, match="requirements-ml.txt"):
+            HuggingFaceLocalClient("org/model").complete("s", "p")
+
+
+class TestAutoWithHuggingFace:
+    def pick(self, **options):
+        chosen = settings(llm_provider="auto", hf_llm_model="org/model", hf_token="tok")
+        defaults = {
+            "discover": lambda url: [],
+            "cached": lambda repo: True,
+            "available": lambda: {"transformers": True},
+        }
+        defaults.update(options)
+        return build_client(chosen, **defaults)
+
+    def test_a_downloaded_model_is_used_when_ollama_is_not_running(self):
+        client = self.pick()
+        assert isinstance(client, HuggingFaceLocalClient)
+        assert client.name == "hf_local:org/model"
+
+    def test_ollama_comes_first(self):
+        assert isinstance(self.pick(discover=lambda url: ["llama3.2:latest"]), OllamaClient)
+
+    def test_a_model_that_is_not_downloaded_is_not_used(self):
+        assert isinstance(self.pick(cached=lambda repo: False), MockClient)
+
+    def test_without_the_package_the_offline_model_is_used(self):
+        assert isinstance(self.pick(available=lambda: {"transformers": False}), MockClient)
+
+    def test_the_chosen_model_name_is_checked(self):
+        asked = []
+        self.pick(cached=lambda repo: asked.append(repo) or False)
+        assert asked == ["org/model"]
+
+    def test_the_explicit_local_choice_passes_the_token_on(self):
+        client = build_client(settings(llm_provider="hf_local", hf_token="tok"))
+        assert client._token == "tok"

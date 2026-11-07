@@ -33,10 +33,11 @@ class HuggingFaceInferenceClient:
 class HuggingFaceLocalClient:
     hosted = False
 
-    def __init__(self, model, pipeline=None):
+    def __init__(self, model, pipeline=None, token=None):
         self.model = model
         self.name = f"hf_local:{model}"
         self._pipeline = pipeline
+        self._token = token or None
 
     def _load(self):
         if self._pipeline is None:
@@ -47,7 +48,7 @@ class HuggingFaceLocalClient:
                     "hf_local needs the transformers package. "
                     "Run: pip install -r requirements-ml.txt"
                 ) from error
-            self._pipeline = pipeline("text-generation", model=self.model)
+            self._pipeline = pipeline("text-generation", model=self.model, token=self._token)
         return self._pipeline
 
     def complete(self, system, prompt, max_tokens=400, temperature=0.2):

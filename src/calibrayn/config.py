@@ -24,9 +24,9 @@ class ConfigError(ValueError):
 class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", extra="ignore")
 
-    llm_provider: str = "mock"
+    llm_provider: str = "auto"
     privacy_mode: str = "local"
-    embedder: str = "hashing"
+    embedder: str = "auto"
     index: str = "numpy"
     hf_token: str = ""
     hf_llm_model: str = "Qwen/Qwen2.5-1.5B-Instruct"

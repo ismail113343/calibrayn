@@ -1,17 +1,29 @@
+from calibrayn.hub.cache import is_cached, packages_available
 from calibrayn.llm.base import LLMError, PrivacyError
+from calibrayn.llm.discovery import installed_ollama_models, pick_model
 from calibrayn.llm.hf import HuggingFaceInferenceClient, HuggingFaceLocalClient
 from calibrayn.llm.http import OllamaClient, OpenAICompatibleClient
 from calibrayn.llm.mock import MockClient
 
-PROVIDERS = ("mock", "hf_local", "hf_inference", "ollama", "openai")
+PROVIDERS = ("auto", "mock", "hf_local", "hf_inference", "ollama", "openai")
 
 
-def build_client(settings):
+def build_client(
+    settings, discover=installed_ollama_models, cached=is_cached, available=packages_available
+):
     provider = settings.llm_provider.strip().lower()
-    if provider == "mock":
+    if provider == "auto":
+        chosen = pick_model(settings.ollama_model, discover(settings.ollama_base_url))
+        if chosen:
+            client = OllamaClient(settings.ollama_base_url, chosen)
+        elif available()["transformers"] and cached(settings.hf_llm_model):
+            client = HuggingFaceLocalClient(settings.hf_llm_model, token=settings.hf_token)
+        else:
+            client = MockClient()
+    elif provider == "mock":
         client = MockClient()
     elif provider == "hf_local":
-        client = HuggingFaceLocalClient(settings.hf_llm_model)
+        client = HuggingFaceLocalClient(settings.hf_llm_model, token=settings.hf_token)
     elif provider == "hf_inference":
         if not settings.hf_token:
             raise LLMError("hf_inference needs HF_TOKEN in your .env file.")

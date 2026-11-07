@@ -217,13 +217,15 @@ HISTORY = "The Roman empire built long roads. Roads helped armies move quickly."
 
 
 def settings_for(tmp_path, **changes):
-    return Settings(
-        _env_file=None,
-        data_dir=tmp_path,
-        settings_file=ROOT / "configs" / "settings.yaml",
-        prompts_dir=ROOT / "configs" / "prompts",
-        **changes,
-    )
+    values = {
+        "data_dir": tmp_path,
+        "llm_provider": "mock",
+        "embedder": "hashing",
+        "settings_file": ROOT / "configs" / "settings.yaml",
+        "prompts_dir": ROOT / "configs" / "prompts",
+    }
+    values.update(changes)
+    return Settings(_env_file=None, **values)
 
 
 @pytest.fixture

@@ -11,9 +11,9 @@ def settings(**changes):
 class TestSettings:
     def test_the_defaults_are_safe_and_work_offline(self):
         chosen = settings()
-        assert chosen.llm_provider == "mock"
+        assert chosen.llm_provider == "auto"
         assert chosen.privacy_mode == "local"
-        assert chosen.embedder == "hashing"
+        assert chosen.embedder == "auto"
         assert chosen.index == "numpy"
 
     def test_the_database_lives_in_the_data_folder_by_default(self, tmp_path):
@@ -32,7 +32,7 @@ class TestSettings:
 
     def test_unknown_environment_variables_are_ignored(self, monkeypatch):
         monkeypatch.setenv("SOMETHING_ELSE", "1")
-        assert settings().llm_provider == "mock"
+        assert settings().llm_provider == "auto"
 
     def test_the_default_files_exist(self):
         chosen = settings()
