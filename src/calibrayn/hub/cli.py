@@ -200,6 +200,10 @@ def run_grader(arguments):
             f"  {row['system']}: accuracy {row['accuracy']}, macro F1 {row['macro_f1']}, "
             f"kappa {row['kappa']}"
         )
+    if comparison.model_share is not None:
+        say(f"The model itself marked {comparison.model_share:.0%} of the answers.")
+        if comparison.model_share < 1.0:
+            say("The rest fell back to keyword overlap, so the grader row mixes both.")
     name = "grader_" + re.sub(r"[^A-Za-z0-9]+", "_", arguments.repo).strip("_")
     written = report.write_table(arguments.out, name, table)
     say("Wrote " + ", ".join(str(path) for path in written))

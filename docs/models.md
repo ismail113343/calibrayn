@@ -43,6 +43,11 @@ Then grade the unseen-answers test set. The dataset card lists the default label
 python -m calibrayn.hub grader nkazi/Beetle --split test_ua --question-field question --reference-field reference_answer --answer-field student_answer --label-field label --correct-labels 0 --limit 200
 ```
 
+The output says what share of answers the model itself marked. When the model sends a reply the
+grader cannot read, that answer falls back to keyword overlap. A small local model does this
+sometimes, so always report the share. If it is well below 100 percent, the grader row is partly
+keyword overlap and must not be presented as the model's score.
+
 Repeat with `--split test_uq` (unseen questions) and with `nkazi/SciEntsBank`. Read the split names
 from each dataset page. Use only the official test splits for reported numbers, and keep the
 `--limit` the same across systems.

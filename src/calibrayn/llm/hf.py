@@ -56,13 +56,11 @@ class HuggingFaceLocalClient:
             {"role": "system", "content": system},
             {"role": "user", "content": prompt},
         ]
+        options = {"max_new_tokens": max_tokens, "do_sample": temperature > 0}
+        if temperature > 0:
+            options["temperature"] = temperature
         try:
-            output = self._load()(
-                messages,
-                max_new_tokens=max_tokens,
-                temperature=max(temperature, 0.01),
-                do_sample=temperature > 0,
-            )
+            output = self._load()(messages, **options)
             text = output[0]["generated_text"][-1]["content"]
         except (IndexError, KeyError, TypeError) as error:
             raise LLMError("The local model sent a reply in an unexpected shape.") from error

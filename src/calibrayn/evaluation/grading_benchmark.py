@@ -1,3 +1,4 @@
+from collections import Counter
 from dataclasses import dataclass
 from math import sqrt
 from types import SimpleNamespace
@@ -36,6 +37,7 @@ class GradingReport:
     correct_share: float
     skipped: int
     systems: dict
+    model_share: float | None = None
 
 
 def is_correct_label(value, correct_labels):
@@ -152,22 +154,38 @@ def evaluate_grader(examples, grade, threshold, skipped=0, name="model grader"):
         correct_share=sum(1 for item in examples if item.correct) / len(examples),
         skipped=skipped,
         systems=systems,
+        model_share=getattr(grade, "model_share", None),
     )
 
 
-def model_grade_function(grader):
-    def grade(question, reference, answer):
-        return grader.grade(question, reference, answer, SimpleNamespace(text=reference)).score
+class ModelGrade:
+    def __init__(self, grader):
+        self.grader = grader
+        self.sources = Counter()
 
-    return grade
+    def __call__(self, question, reference, answer):
+        verdict = self.grader.grade(question, reference, answer, SimpleNamespace(text=reference))
+        self.sources[verdict.marked_by] += 1
+        return verdict.score
+
+    @property
+    def model_share(self):
+        total = sum(self.sources.values())
+        return self.sources["model"] / total if total else None
+
+
+def model_grade_function(grader):
+    return ModelGrade(grader)
 
 
 def report_rows(report):
     rows = []
-    for name, scores in report.systems.items():
+    for position, (name, scores) in enumerate(report.systems.items()):
+        share = report.model_share if position == 0 else None
         rows.append(
             {
                 "system": name,
+                "marked_by_model": "" if share is None else round(share, 4),
                 "accuracy": round(scores.accuracy, 4),
                 "precision": round(scores.precision, 4),
                 "recall": round(scores.recall, 4),

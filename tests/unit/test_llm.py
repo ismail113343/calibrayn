@@ -488,7 +488,7 @@ class TestHuggingFaceLocalToken:
 
         def fake_pipeline(task, model, token=None):
             seen.update(task=task, model=model, token=token)
-            return lambda messages, max_new_tokens, temperature, do_sample: [
+            return lambda messages, **options: [
                 {"generated_text": [{"role": "assistant", "content": "Done."}]}
             ]
 
@@ -502,7 +502,7 @@ class TestHuggingFaceLocalToken:
 
         def fake_pipeline(task, model, token=None):
             seen["token"] = token
-            return lambda messages, max_new_tokens, temperature, do_sample: [
+            return lambda messages, **options: [
                 {"generated_text": [{"role": "assistant", "content": "Done."}]}
             ]
 
@@ -549,3 +549,27 @@ class TestAutoWithHuggingFace:
     def test_the_explicit_local_choice_passes_the_token_on(self):
         client = build_client(settings(llm_provider="hf_local", hf_token="tok"))
         assert client._token == "tok"
+
+
+class TestLocalGenerationOptions:
+    def make(self, seen):
+        def fake_pipeline(task, model, token=None):
+            def generate(messages, **options):
+                seen.update(options)
+                return [{"generated_text": [{"role": "assistant", "content": "Done."}]}]
+
+            return generate
+
+        return fake_pipeline
+
+    def test_no_randomness_means_no_temperature_is_passed(self, monkeypatch):
+        seen = {}
+        monkeypatch.setitem(sys.modules, "transformers", SimpleNamespace(pipeline=self.make(seen)))
+        HuggingFaceLocalClient("org/model").complete("s", "p", max_tokens=50, temperature=0.0)
+        assert seen == {"max_new_tokens": 50, "do_sample": False}
+
+    def test_some_randomness_passes_the_temperature(self, monkeypatch):
+        seen = {}
+        monkeypatch.setitem(sys.modules, "transformers", SimpleNamespace(pipeline=self.make(seen)))
+        HuggingFaceLocalClient("org/model").complete("s", "p", max_tokens=50, temperature=0.4)
+        assert seen == {"max_new_tokens": 50, "do_sample": True, "temperature": 0.4}
