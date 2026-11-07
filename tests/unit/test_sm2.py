@@ -19,7 +19,6 @@ NOW = datetime(2026, 10, 19, 9, 30)
 
 
 def run_reviews(grades, config=DEFAULT_CONFIG):
-    """Review a topic each time it falls due, and return the schedule at the end."""
     schedule = new_schedule(config)
     moment = NOW
     for grade in grades:
