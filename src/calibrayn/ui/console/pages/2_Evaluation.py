@@ -16,13 +16,13 @@ from calibrayn.evaluation.simulation import Setup, run_personas
 from calibrayn.hub.rows import HubError, describe_rows, load_rows
 from calibrayn.llm.base import LLMError
 from calibrayn.ui.components.palette import AMBER, BLUE
-from calibrayn.ui.components.sidebar import show_sidebar
+from calibrayn.ui.components.sidebar import show_console_sidebar
 from calibrayn.ui.state import get_workspace
 
 st.set_page_config(page_title="Evaluation", page_icon=":brain:", layout="wide")
 
 workspace = get_workspace()
-show_sidebar(workspace)
+show_console_sidebar(workspace)
 
 st.title("Evaluation")
 st.caption(

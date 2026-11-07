@@ -8,13 +8,13 @@ from calibrayn.hub.rows import HubError
 from calibrayn.hub.status import hub_status
 from calibrayn.llm.base import LLMError
 from calibrayn.llm.discovery import installed_ollama_models
-from calibrayn.ui.components.sidebar import show_sidebar
+from calibrayn.ui.components.sidebar import show_console_sidebar
 from calibrayn.ui.state import get_workspace
 
 st.set_page_config(page_title="Setup", page_icon=":brain:", layout="wide")
 
 workspace = get_workspace()
-show_sidebar(workspace)
+show_console_sidebar(workspace)
 client = workspace.client
 settings = workspace.settings
 

@@ -1,6 +1,6 @@
 # Running the evaluation
 
-Everything here can be run from the app (Evaluation page) or from the command line.
+Everything here can be run from the researcher console (Evaluation page) or from the command line.
 
 ## What the evaluation answers
 

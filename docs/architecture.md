@@ -4,7 +4,8 @@
 
 ```mermaid
 flowchart TD
-    pages["Streamlit pages: Upload, Chat, Tutor, Quiz, Dashboard, Evaluation, Setup"]
+    pages["Student app: Upload, Chat, Tutor, Quiz, Dashboard"]
+    console["Researcher console: Setup, Evaluation"]
     workspace["Workspace: wires everything together"]
     agent["Study agent: plans each question and handles each answer"]
     monitors["Monitors: ZPD tracker, cognitive load, metacognition"]
@@ -15,6 +16,7 @@ flowchart TD
     store["SQLite: notes, schedules, every answer"]
 
     pages --> workspace
+    console --> workspace
     workspace --> agent
     workspace --> pipeline
     agent --> monitors
@@ -55,6 +57,7 @@ flowchart LR
 | `src/calibrayn/evaluation` | Question dataset, review and quality tools, search scores with baselines, grounding test, learner simulation, reports and command line |
 | `src/calibrayn/hub` | Hugging Face: dataset reading, model download, dataset cards, publishing, Space deployment and command line |
 | `deploy/huggingface` | The Dockerfile and card used for the Space |
-| `src/calibrayn/ui` | Streamlit pages, palette, guidance and sample notes |
+| `src/calibrayn/ui` | The student app: Streamlit pages, palette, guidance and sample notes |
+| `src/calibrayn/ui/console` | The researcher console: model setup and evaluation pages |
 | `configs` | Every tunable number and the prompt files |
 | `docs/decisions` | One short record per design decision |

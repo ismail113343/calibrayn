@@ -69,12 +69,19 @@ class TestHome:
         assert values["Topics"] == "1"
         assert values["Due now"] == "1"
 
-    def test_the_sidebar_warns_about_the_offline_demo_model(self):
+    def test_the_sidebar_is_short_and_not_technical(self):
         page = open_page("Home.py")
-        assert any(
-            "No language model is connected" in value for value in texts(page.sidebar.warning)
-        )
-        assert any("stay on this computer" in value for value in texts(page.sidebar.caption))
+        captions = texts(page.sidebar.caption)
+        assert any("stay on this computer" in value for value in captions)
+        assert any("Basic mode" in value for value in captions)
+        assert not page.sidebar.warning
+        assert not any("Model:" in value or "Embeddings:" in value for value in captions)
+
+    def test_a_real_model_removes_the_basic_mode_note(self, monkeypatch, ollama_url):
+        monkeypatch.setenv("LLM_PROVIDER", "auto")
+        monkeypatch.setenv("OLLAMA_BASE_URL", ollama_url)
+        page = open_page("Home.py")
+        assert not any("Basic mode" in value for value in texts(page.sidebar.caption))
 
 
 class TestUpload:
@@ -283,9 +290,12 @@ class TestGuidedHome:
         page = open_page("Home.py")
         assert any("Connect a language model" in value for value in texts(page.info))
 
-    def test_the_pages_are_explained(self):
+    def test_only_the_student_pages_are_explained(self):
         page = open_page("Home.py")
-        assert any("Evaluation" in value for value in texts(page.markdown))
+        shown = " ".join(texts(page.markdown))
+        assert "Quiz" in shown and "Dashboard" in shown
+        assert "Evaluation" not in shown
+        assert "Setup" not in shown
 
 
 class TestUploadHelp:
@@ -400,7 +410,7 @@ class TestDashboardHelp:
 
 class TestSetupPage:
     def test_it_shows_what_is_connected(self):
-        page = open_page("pages/7_Setup.py")
+        page = open_page("console/pages/1_Setup.py")
         assert not page.exception
         assert page.title[0].value == "Model setup"
         table = page.dataframe[0].value
@@ -409,16 +419,16 @@ class TestSetupPage:
 
     def test_it_says_when_ollama_is_missing(self, monkeypatch):
         monkeypatch.setenv("OLLAMA_BASE_URL", "http://127.0.0.1:9")
-        page = open_page("pages/7_Setup.py")
+        page = open_page("console/pages/1_Setup.py")
         assert any("Ollama was not found" in value for value in texts(page.info))
 
     def test_it_lists_the_models_ollama_has(self, monkeypatch, ollama_url):
         monkeypatch.setenv("OLLAMA_BASE_URL", ollama_url)
-        page = open_page("pages/7_Setup.py")
+        page = open_page("console/pages/1_Setup.py")
         assert any("llama3.2:latest" in value for value in texts(page.success))
 
     def test_testing_the_offline_model_explains_itself(self):
-        page = open_page("pages/7_Setup.py")
+        page = open_page("console/pages/1_Setup.py")
         page.button(key="test_model").click().run()
         assert any("needs no test" in value for value in texts(page.info))
 
@@ -426,7 +436,7 @@ class TestSetupPage:
         monkeypatch.setenv("LLM_PROVIDER", "auto")
         monkeypatch.setenv("OLLAMA_BASE_URL", ollama_url)
         monkeypatch.setenv("OLLAMA_MODEL", "llama3.2")
-        page = open_page("pages/7_Setup.py")
+        page = open_page("console/pages/1_Setup.py")
         assert any(
             "Model: ollama:llama3.2:latest" in value for value in texts(page.sidebar.caption)
         )
@@ -435,7 +445,7 @@ class TestSetupPage:
     def test_the_connection_test_reports_the_reply(self, monkeypatch, ollama_url):
         monkeypatch.setenv("LLM_PROVIDER", "auto")
         monkeypatch.setenv("OLLAMA_BASE_URL", ollama_url)
-        page = open_page("pages/7_Setup.py")
+        page = open_page("console/pages/1_Setup.py")
         page.button(key="test_model").click().run()
         assert any("answered in" in value for value in texts(page.success))
         assert any("Four." in value for value in texts(page.markdown))
@@ -444,7 +454,7 @@ class TestSetupPage:
 class TestEvaluationPage:
     def test_questions_are_written_and_search_is_checked(self):
         seed_samples()
-        page = open_page("pages/6_Evaluation.py")
+        page = open_page("console/pages/2_Evaluation.py")
         page.button(key="eval_build").click().run()
         assert not page.exception
         assert any("questions are ready" in value for value in texts(page.success))
@@ -456,12 +466,12 @@ class TestEvaluationPage:
         assert "Average rank score" in labels
 
     def test_building_questions_without_notes_reports_it(self):
-        page = open_page("pages/6_Evaluation.py")
+        page = open_page("console/pages/2_Evaluation.py")
         page.button(key="eval_build").click().run()
         assert any("Add some notes" in value for value in texts(page.error))
 
     def test_the_simulation_compares_the_chosen_learners(self):
-        page = open_page("pages/6_Evaluation.py")
+        page = open_page("console/pages/2_Evaluation.py")
         page.multiselect(key="sim_personas").set_value(["steady", "overconfident"])
         page.slider(key="sim_days").set_value(14)
         page.slider(key="sim_seeds").set_value(3)
@@ -473,7 +483,7 @@ class TestEvaluationPage:
         assert {"Plain SM-2", "Adjusted", "Difference", "Low", "High"} <= set(table.columns)
 
     def test_the_simulation_cannot_run_with_no_learners(self):
-        page = open_page("pages/6_Evaluation.py")
+        page = open_page("console/pages/2_Evaluation.py")
         page.multiselect(key="sim_personas").set_value([])
         page.run()
         assert page.button(key="sim_run").disabled
@@ -491,7 +501,7 @@ class TestSetupHuggingFace:
         return next(table for table in tables if "Item" in table.columns)
 
     def test_the_section_shows_what_is_downloaded(self):
-        page = open_page("pages/7_Setup.py")
+        page = open_page("console/pages/1_Setup.py")
         assert not page.exception
         table = self.statuses(page)
         assert "Not downloaded" in table["Status"].tolist()
@@ -499,7 +509,7 @@ class TestSetupHuggingFace:
 
     def test_missing_packages_are_explained(self, monkeypatch):
         monkeypatch.setattr("calibrayn.hub.cache.find_spec", lambda name: None)
-        page = open_page("pages/7_Setup.py")
+        page = open_page("console/pages/1_Setup.py")
         assert any("requirements-ml.txt" in value for value in texts(page.info))
         assert "Not installed" in self.statuses(page)["Status"].tolist()
 
@@ -507,7 +517,7 @@ class TestSetupHuggingFace:
         monkeypatch.setattr(
             "calibrayn.hub.models.download_model", lambda repo, token: "/saved/here"
         )
-        page = open_page("pages/7_Setup.py")
+        page = open_page("console/pages/1_Setup.py")
         page.button(key="download_embedding").click().run()
         assert not page.exception
         assert any("Downloaded BAAI/bge-small-en-v1.5" in value for value in texts(page.success))
@@ -518,7 +528,7 @@ class TestSetupHuggingFace:
         monkeypatch.setattr(
             "calibrayn.hub.models.download_model", lambda repo, token: asked.append(repo) or "/x"
         )
-        page = open_page("pages/7_Setup.py")
+        page = open_page("console/pages/1_Setup.py")
         page.button(key="download_llm").click().run()
         assert asked == ["Qwen/Qwen2.5-1.5B-Instruct"]
 
@@ -527,7 +537,7 @@ class TestSetupHuggingFace:
             raise HubError("Could not download: offline")
 
         monkeypatch.setattr("calibrayn.hub.models.download_model", broken)
-        page = open_page("pages/7_Setup.py")
+        page = open_page("console/pages/1_Setup.py")
         page.button(key="download_embedding").click().run()
         assert any("offline" in value for value in texts(page.error))
 
@@ -550,7 +560,7 @@ class TestEvaluationBenchmarks:
 
     def test_the_own_dataset_is_compared_with_keyword_search_and_chance(self):
         seed_samples()
-        page = open_page("pages/6_Evaluation.py")
+        page = open_page("console/pages/2_Evaluation.py")
         page.button(key="eval_build").click().run()
         page.button(key="eval_check").click().run()
         assert not page.exception
@@ -561,13 +571,13 @@ class TestEvaluationBenchmarks:
         assert "keyword search (BM25)" in systems
 
     def test_the_public_buttons_wait_for_the_needed_fields(self):
-        page = open_page("pages/6_Evaluation.py")
+        page = open_page("console/pages/2_Evaluation.py")
         assert page.button(key="hub_inspect").disabled
         assert page.button(key="hub_run").disabled
 
     def test_the_columns_of_a_public_dataset_can_be_shown(self, monkeypatch):
         monkeypatch.setattr("calibrayn.hub.rows.default_loader", lambda *args: self.ROWS)
-        page = open_page("pages/6_Evaluation.py")
+        page = open_page("console/pages/2_Evaluation.py")
         page.text_input(key="hub_repo").set_value("org/data").run()
         page.button(key="hub_inspect").click().run()
         assert not page.exception
@@ -576,7 +586,7 @@ class TestEvaluationBenchmarks:
 
     def test_a_public_dataset_is_scored_against_the_baselines(self, monkeypatch):
         monkeypatch.setattr("calibrayn.hub.rows.default_loader", lambda *args: self.ROWS)
-        page = open_page("pages/6_Evaluation.py")
+        page = open_page("console/pages/2_Evaluation.py")
         page.text_input(key="hub_repo").set_value("org/data").run()
         page.text_input(key="hub_question").set_value("question").run()
         page.text_input(key="hub_context").set_value("context").run()
@@ -588,7 +598,7 @@ class TestEvaluationBenchmarks:
 
     def test_a_wrong_column_name_is_explained(self, monkeypatch):
         monkeypatch.setattr("calibrayn.hub.rows.default_loader", lambda *args: self.ROWS)
-        page = open_page("pages/6_Evaluation.py")
+        page = open_page("console/pages/2_Evaluation.py")
         page.text_input(key="hub_repo").set_value("org/data").run()
         page.text_input(key="hub_question").set_value("wrong").run()
         page.text_input(key="hub_context").set_value("context").run()
@@ -600,7 +610,46 @@ class TestEvaluationBenchmarks:
             raise HubError("Could not read org/data: offline")
 
         monkeypatch.setattr("calibrayn.hub.rows.default_loader", broken)
-        page = open_page("pages/6_Evaluation.py")
+        page = open_page("console/pages/2_Evaluation.py")
         page.text_input(key="hub_repo").set_value("org/data").run()
         page.button(key="hub_inspect").click().run()
         assert any("offline" in value for value in texts(page.error))
+
+
+class TestConsole:
+    def test_the_landing_page_shows_the_current_connections(self):
+        page = open_page("console/Console.py")
+        assert not page.exception
+        assert page.title[0].value == "Researcher console"
+        labels = [metric.label for metric in page.metric]
+        assert labels == ["Language model", "Embeddings", "Privacy mode"]
+        assert any("never need this" in value for value in texts(page.markdown))
+
+    def test_the_console_sidebar_is_technical(self):
+        page = open_page("console/Console.py")
+        captions = texts(page.sidebar.caption)
+        assert any("Model: mock" in value for value in captions)
+        assert any("Embeddings: hashing-384" in value for value in captions)
+        assert any(
+            "No language model is connected" in value for value in texts(page.sidebar.warning)
+        )
+
+    def test_the_commands_are_listed(self):
+        page = open_page("console/Console.py")
+        assert any("calibrayn.hub grader" in code.value for code in page.code)
+
+
+class TestStudentAppStaysClean:
+    def test_no_developer_page_is_in_the_student_app(self):
+        names = sorted(path.name for path in (PAGES / "pages").glob("*.py"))
+        assert names == ["1_Upload.py", "2_Chat.py", "3_Tutor.py", "4_Quiz.py", "5_Dashboard.py"]
+
+    def test_the_console_pages_are_separate(self):
+        names = sorted(path.name for path in (PAGES / "console" / "pages").glob("*.py"))
+        assert names == ["1_Setup.py", "2_Evaluation.py"]
+
+    def test_no_student_page_mentions_developer_tools(self):
+        for path in [PAGES / "Home.py", *(PAGES / "pages").glob("*.py")]:
+            text = path.read_text(encoding="utf-8")
+            assert "calibrayn.evaluation" not in text
+            assert "calibrayn.hub" not in text
