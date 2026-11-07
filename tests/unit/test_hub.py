@@ -1,4 +1,6 @@
+import importlib
 import json
+import os
 import sys
 from types import SimpleNamespace
 
@@ -503,3 +505,53 @@ class TestHubStatus:
             self.settings(token=""), cached=lambda repo: False, available=self.ready
         )
         assert not status.token_set
+
+
+class TestTokenAndNoise:
+    def test_a_token_from_the_settings_is_shared_with_every_hugging_face_call(self, monkeypatch):
+        from calibrayn.hub import use_token
+
+        monkeypatch.setenv("HF_TOKEN", "")
+        use_token("from-settings")
+        assert os.environ["HF_TOKEN"] == "from-settings"
+
+    def test_a_token_already_in_the_environment_is_kept(self, monkeypatch):
+        from calibrayn.hub import use_token
+
+        monkeypatch.setenv("HF_TOKEN", "already-there")
+        use_token("from-settings")
+        assert os.environ["HF_TOKEN"] == "already-there"
+
+    def test_an_empty_token_changes_nothing(self, monkeypatch):
+        from calibrayn.hub import use_token
+
+        monkeypatch.setenv("HF_TOKEN", "")
+        use_token("")
+        assert os.environ["HF_TOKEN"] == ""
+
+    def test_the_windows_symlink_warning_is_silenced_by_default(self, monkeypatch):
+        import calibrayn.hub
+
+        monkeypatch.setenv("HF_HUB_DISABLE_SYMLINKS_WARNING", "")
+        monkeypatch.delenv("HF_HUB_DISABLE_SYMLINKS_WARNING")
+        importlib.reload(calibrayn.hub)
+        assert os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] == "1"
+
+    def test_a_choice_made_by_the_user_is_respected(self, monkeypatch):
+        import calibrayn.hub
+
+        monkeypatch.setenv("HF_HUB_DISABLE_SYMLINKS_WARNING", "0")
+        importlib.reload(calibrayn.hub)
+        assert os.environ["HF_HUB_DISABLE_SYMLINKS_WARNING"] == "0"
+
+    def test_the_command_line_shares_the_token_before_it_works(self, monkeypatch, tmp_path):
+        monkeypatch.setenv("HF_TOKEN", "")
+        monkeypatch.setattr(
+            "calibrayn.hub.cli.Settings",
+            lambda: SimpleNamespace(
+                hf_token="cli-token", hf_embedding_model="a/b", hf_llm_model="c/d"
+            ),
+        )
+        monkeypatch.setattr("calibrayn.hub.cli.download_model", lambda repo, token: "/saved")
+        assert main(["download", "--embedding"]) == 0
+        assert os.environ["HF_TOKEN"] == "cli-token"

@@ -22,7 +22,7 @@ from calibrayn.evaluation.grading_benchmark import (
     report_rows,
 )
 from calibrayn.evaluation.groundedness import evaluate_groundedness
-from calibrayn.hub import publish
+from calibrayn.hub import publish, use_token
 from calibrayn.hub.models import download_model
 from calibrayn.hub.rows import HubError, describe_rows, load_rows
 from calibrayn.llm.base import LLMError
@@ -262,6 +262,7 @@ STEPS = {
 def main(argv=None):
     arguments = build_parser().parse_args(argv)
     try:
+        use_token(Settings().hf_token)
         return STEPS[arguments.step](arguments)
     except (
         HubError,
