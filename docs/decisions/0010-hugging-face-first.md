@@ -18,7 +18,7 @@ Models and embeddings
 - With LLM_PROVIDER=auto the app uses Ollama if it is running, then a Hugging Face model that has
   already been downloaded, then the offline model. EMBEDDER=auto uses the Hugging Face embedding
   model once it is downloaded, otherwise the offline hashing embedder.
-- Nothing is downloaded silently. The Setup page and the hub download command do it on request,
+- Nothing is downloaded silently. The Setup page of the researcher console and the hub download command do it on request,
   because the language model is several gigabytes.
 - A Hugging Face token is read from HF_TOKEN and passed to every download and load, so private or
   gated models work. It is never written to a file by the app.

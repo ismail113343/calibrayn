@@ -17,7 +17,7 @@ python -m calibrayn.hub download
 
 This downloads the embedding model and the language model chosen in `.env`
 (`HF_EMBEDDING_MODEL`, `HF_LLM_MODEL`). Use `--embedding` or `--llm` for one of them. The language
-model is several gigabytes, so check its page first. The Setup page has the same two buttons.
+model is several gigabytes, so check its page first. The Setup page of the researcher console has the same two buttons.
 
 With `LLM_PROVIDER=auto` and `EMBEDDER=auto` (the defaults) the app uses the downloaded models the
 next time it starts. For a private or gated model, put your token in `.env` as `HF_TOKEN=`.

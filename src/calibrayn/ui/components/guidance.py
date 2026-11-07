@@ -18,8 +18,8 @@ def steps(summary, model_name):
         ),
         Step(
             "Connect a language model",
-            "Open Setup to connect a real model. Until then the offline model writes simple "
-            "questions from your own sentences.",
+            "Without an AI model the questions are simple. The README explains how to connect one "
+            "on this computer.",
             model_name != "mock",
         ),
         Step(

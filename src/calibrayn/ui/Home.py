@@ -34,6 +34,4 @@ with st.expander("Getting started", expanded=summary.documents == 0):
 st.subheader("The pages")
 st.write("**Upload** adds notes. **Chat** answers questions from them, with sources.")
 st.write("**Tutor** explains a topic with a worked example. **Quiz** is the main practice.")
-st.write(
-    "**Dashboard** shows progress. **Evaluation** tests the system. **Setup** connects a model."
-)
+st.write("**Dashboard** shows your progress and whether your confidence matches your results.")

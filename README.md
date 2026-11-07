@@ -34,15 +34,29 @@ copy .env.example .env
 streamlit run src/calibrayn/ui/Home.py
 ```
 
-The Home page shows what to do next. Open **Upload** and add notes, or use the sample biology
-notes. Open **Quiz** to practise.
+This is the student app: Upload, Chat, Tutor, Quiz and Dashboard. The Home page shows what to do
+next. Open **Upload** and add notes, or use the sample biology notes, then open **Quiz** to practise.
+
+## Researcher console
+
+Setting up models and testing the system is separate from the student app, so students never see
+it. Start it with:
+
+```
+streamlit run src/calibrayn/ui/console/Console.py
+```
+
+It has a **Setup** page (what is connected, Hugging Face downloads, a connection test) and an
+**Evaluation** page (search checks on your notes and on public datasets, and the learner
+simulation). The same tools are available from the command line, see below.
 
 ## Connect a language model
 
 The app looks for a model by itself, in this order: Ollama if it is running, then a Hugging Face
 model that has been downloaded, then an offline model that only builds simple questions from your
-own sentences. The sidebar says which is in use. The **Setup** page shows what is connected, lets
-you download Hugging Face models, gives the exact commands, and tests the connection.
+own sentences. In that case the student app shows a short "basic mode" note. The **Setup** page of
+the researcher console shows what is connected, lets you download Hugging Face models, gives the
+exact commands, and tests the connection.
 
 | Goal | Settings in `.env` |
 | --- | --- |
@@ -72,7 +86,7 @@ python -m calibrayn.hub deploy yourname/calibrayn
 
 ## Evaluate
 
-Open the **Evaluation** page, or use the command line. See [docs/evaluation.md](docs/evaluation.md).
+Open the **Evaluation** page of the researcher console, or use the command line. See [docs/evaluation.md](docs/evaluation.md).
 
 ```
 python -m calibrayn.evaluation questions --count 100
