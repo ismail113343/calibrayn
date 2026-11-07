@@ -14,6 +14,7 @@ from calibrayn.evaluation.grading_benchmark import (
     score_predictions,
 )
 from calibrayn.hub.cli import main
+from calibrayn.llm.base import LLMError
 from calibrayn.llm.mock import MockClient
 from calibrayn.rag.prompts import PromptBook
 from calibrayn.services.grading import Grader
@@ -222,6 +223,69 @@ class TestModelGrader:
         assert self.make()("Why does ice float?", reference, "Bananas are yellow.") < 0.3
 
 
+class RefusingClient:
+    name = "refusing"
+    hosted = False
+
+    def complete(self, system, prompt, max_tokens=400, temperature=0.2):
+        raise LLMError("model is down")
+
+
+class TestModelShare:
+    reference = "Ice is less dense than liquid water so it floats."
+
+    def test_answers_marked_by_the_model_are_counted(self):
+        grade = model_grade_function(Grader(MockClient(), PromptBook(ROOT / "configs" / "prompts")))
+        grade("Why?", self.reference, self.reference)
+        grade("Why?", self.reference, "Bananas are yellow.")
+        assert grade.sources["model"] == 2
+        assert grade.model_share == 1.0
+
+    def test_fallbacks_lower_the_share(self):
+        grade = model_grade_function(
+            Grader(RefusingClient(), PromptBook(ROOT / "configs" / "prompts"))
+        )
+        grade("Why?", self.reference, self.reference)
+        grade("Why?", self.reference, "Bananas are yellow.")
+        assert grade.sources["keywords"] == 2
+        assert grade.model_share == 0.0
+
+    def test_blank_answers_are_not_counted_as_the_model(self):
+        grade = model_grade_function(Grader(MockClient(), PromptBook(ROOT / "configs" / "prompts")))
+        grade("Why?", self.reference, self.reference)
+        grade("Why?", self.reference, "   ")
+        assert grade.model_share == 0.5
+
+    def test_no_answers_means_no_share(self):
+        grade = model_grade_function(Grader(MockClient(), PromptBook(ROOT / "configs" / "prompts")))
+        assert grade.model_share is None
+
+    def test_the_report_carries_the_share(self):
+        data = [
+            Example("Why?", self.reference, self.reference, True),
+            Example("Why?", self.reference, "no idea", False),
+        ]
+        grade = model_grade_function(
+            Grader(RefusingClient(), PromptBook(ROOT / "configs" / "prompts"))
+        )
+        report = evaluate_grader(data, grade, 0.6)
+        assert report.model_share == 0.0
+        assert report_rows(report)[0]["marked_by_model"] == 0.0
+        assert report_rows(report)[1]["marked_by_model"] == ""
+
+    def test_a_plain_function_has_no_share(self):
+        report = evaluate_grader(examples_for_share(), lambda q, r, a: 1.0, 0.6)
+        assert report.model_share is None
+        assert report_rows(report)[0]["marked_by_model"] == ""
+
+
+def examples_for_share():
+    return [
+        Example("Q?", "A reference.", "An answer.", True),
+        Example("Q?", "A reference.", "Other.", False),
+    ]
+
+
 class TestReportRows:
     def test_numbers_are_rounded_and_missing_values_are_blank(self):
         report = evaluate_grader(
@@ -263,6 +327,7 @@ class TestCommand:
         assert "4 answers (50% correct" in shown
         assert "keyword overlap" in shown
         assert "always the majority label" in shown
+        assert "The model itself marked 100% of the answers." in shown
         assert (env / "reports" / "grader_org_sra.csv").is_file()
 
     def test_the_offline_grader_gets_the_clear_cases_right(self, env, capsys):
