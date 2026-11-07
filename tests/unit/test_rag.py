@@ -121,20 +121,87 @@ class TestSentenceTransformerEmbedder:
 
 
 class TestBuildEmbedder:
+    def chosen(self, embedder, token=""):
+        return SimpleNamespace(
+            embedder=embedder, hf_embedding_model="BAAI/bge-small-en-v1.5", hf_token=token
+        )
+
     def test_hashing(self):
-        assert isinstance(build_embedder(SimpleNamespace(embedder="Hashing")), HashingEmbedder)
+        assert isinstance(build_embedder(self.chosen("Hashing")), HashingEmbedder)
 
     def test_huggingface_uses_the_configured_model(self):
-        chosen = SimpleNamespace(
-            embedder="huggingface", hf_embedding_model="BAAI/bge-small-en-v1.5"
-        )
-        embedder = build_embedder(chosen)
+        embedder = build_embedder(self.chosen("huggingface"))
         assert isinstance(embedder, SentenceTransformerEmbedder)
         assert embedder.name == "BAAI/bge-small-en-v1.5"
 
+    def test_auto_uses_the_hugging_face_model_once_it_is_downloaded(self):
+        embedder = build_embedder(
+            self.chosen("auto"),
+            cached=lambda repo: True,
+            available=lambda: {"sentence_transformers": True},
+        )
+        assert isinstance(embedder, SentenceTransformerEmbedder)
+
+    def test_auto_waits_for_the_download(self):
+        embedder = build_embedder(
+            self.chosen("auto"),
+            cached=lambda repo: False,
+            available=lambda: {"sentence_transformers": True},
+        )
+        assert isinstance(embedder, HashingEmbedder)
+
+    def test_auto_needs_the_package(self):
+        embedder = build_embedder(
+            self.chosen("auto"),
+            cached=lambda repo: True,
+            available=lambda: {"sentence_transformers": False},
+        )
+        assert isinstance(embedder, HashingEmbedder)
+
+    def test_auto_asks_about_the_chosen_model(self):
+        asked = []
+        build_embedder(
+            self.chosen("auto"),
+            cached=lambda repo: asked.append(repo) or False,
+            available=lambda: {"sentence_transformers": True},
+        )
+        assert asked == ["BAAI/bge-small-en-v1.5"]
+
     def test_unknown_choice_is_refused(self):
-        with pytest.raises(EmbedderError, match="hashing or huggingface"):
-            build_embedder(SimpleNamespace(embedder="magic"))
+        with pytest.raises(EmbedderError, match="auto, hashing or huggingface"):
+            build_embedder(self.chosen("magic"))
+
+    def test_the_token_reaches_the_model_when_it_loads(self, monkeypatch):
+        seen = {}
+
+        class FakeModel:
+            def __init__(self, name, token=None):
+                seen.update(name=name, token=token)
+
+            def encode(self, texts, normalize_embeddings):
+                return np.ones((len(texts), 3))
+
+        monkeypatch.setitem(
+            sys.modules, "sentence_transformers", SimpleNamespace(SentenceTransformer=FakeModel)
+        )
+        build_embedder(self.chosen("huggingface", token="secret")).embed_query("question")
+        assert seen == {"name": "BAAI/bge-small-en-v1.5", "token": "secret"}
+
+    def test_an_empty_token_is_passed_as_none(self, monkeypatch):
+        seen = {}
+
+        class FakeModel:
+            def __init__(self, name, token=None):
+                seen["token"] = token
+
+            def encode(self, texts, normalize_embeddings):
+                return np.ones((len(texts), 3))
+
+        monkeypatch.setitem(
+            sys.modules, "sentence_transformers", SimpleNamespace(SentenceTransformer=FakeModel)
+        )
+        build_embedder(self.chosen("huggingface")).embed_query("question")
+        assert seen["token"] is None
 
 
 INDEX_TYPES = [

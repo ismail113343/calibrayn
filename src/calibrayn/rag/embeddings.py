@@ -2,6 +2,7 @@ import hashlib
 
 import numpy as np
 
+from calibrayn.hub.cache import is_cached, packages_available
 from calibrayn.text import content_words
 
 QUERY_PREFIX = "Represent this sentence for searching relevant passages: "
@@ -37,9 +38,10 @@ class HashingEmbedder:
 
 
 class SentenceTransformerEmbedder:
-    def __init__(self, model_name, model=None):
+    def __init__(self, model_name, model=None, token=None):
         self.name = model_name
         self._model = model
+        self._token = token or None
         self._query_prefix = QUERY_PREFIX if "bge" in model_name.lower() else ""
 
     def _load(self):
@@ -51,7 +53,7 @@ class SentenceTransformerEmbedder:
                     "The huggingface embedder needs sentence-transformers. "
                     "Run: pip install -r requirements-ml.txt"
                 ) from error
-            self._model = SentenceTransformer(self.name)
+            self._model = SentenceTransformer(self.name, token=self._token)
         return self._model
 
     def embed_documents(self, texts):
@@ -65,10 +67,16 @@ class SentenceTransformerEmbedder:
         return np.asarray(vectors[0], dtype=np.float32)
 
 
-def build_embedder(settings):
+def build_embedder(settings, cached=is_cached, available=packages_available):
     choice = settings.embedder.strip().lower()
     if choice == "hashing":
         return HashingEmbedder()
     if choice == "huggingface":
-        return SentenceTransformerEmbedder(settings.hf_embedding_model)
-    raise EmbedderError(f"Unknown EMBEDDER '{settings.embedder}'. Use hashing or huggingface.")
+        return SentenceTransformerEmbedder(settings.hf_embedding_model, token=settings.hf_token)
+    if choice == "auto":
+        if available()["sentence_transformers"] and cached(settings.hf_embedding_model):
+            return SentenceTransformerEmbedder(settings.hf_embedding_model, token=settings.hf_token)
+        return HashingEmbedder()
+    raise EmbedderError(
+        f"Unknown EMBEDDER '{settings.embedder}'. Use auto, hashing or huggingface."
+    )

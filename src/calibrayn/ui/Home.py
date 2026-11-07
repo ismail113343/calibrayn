@@ -1,5 +1,6 @@
 import streamlit as st
 
+from calibrayn.ui.components.guidance import next_step, steps
 from calibrayn.ui.components.sidebar import show_sidebar
 from calibrayn.ui.state import get_workspace
 
@@ -16,15 +17,23 @@ st.write(
 
 summary = workspace.analytics.summary(workspace.clock())
 first, second, third, fourth = st.columns(4)
-first.metric("Documents", summary.documents)
-second.metric("Topics", summary.topics)
-third.metric("Due now", summary.due_now)
+first.metric("Documents", summary.documents, help="Files you have added")
+second.metric("Topics", summary.topics, help="Each document is split into topics")
+third.metric("Due now", summary.due_now, help="Topics ready to study")
 fourth.metric("Answers so far", summary.attempts)
 
-if summary.documents == 0:
-    st.info("Start on the Upload page. Add a PDF, Word, PowerPoint, text or Markdown file.")
-else:
-    st.write(
-        "Use Quiz to practise, Tutor to learn a topic, Chat to ask questions, "
-        "and Dashboard to see your progress."
-    )
+step = next_step(summary, workspace.client.name)
+st.subheader("What to do next")
+st.info(f"**{step.title}.** {step.text}")
+
+with st.expander("Getting started", expanded=summary.documents == 0):
+    for item in steps(summary, workspace.client.name):
+        label = "Done" if item.done else "To do"
+        st.write(f"**{label}: {item.title}.** {item.text}")
+
+st.subheader("The pages")
+st.write("**Upload** adds notes. **Chat** answers questions from them, with sources.")
+st.write("**Tutor** explains a topic with a worked example. **Quiz** is the main practice.")
+st.write(
+    "**Dashboard** shows progress. **Evaluation** tests the system. **Setup** connects a model."
+)

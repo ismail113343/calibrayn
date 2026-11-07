@@ -28,6 +28,17 @@ def post_json(url, payload, headers=None, timeout=120.0):
         raise LLMError(f"Could not get a reply from {url}: {error}") from error
 
 
+def get_json(url, timeout=5.0):
+    request = urllib.request.Request(url, method="GET")
+    try:
+        with urllib.request.urlopen(request, timeout=timeout) as response:
+            return json.loads(response.read().decode("utf-8"))
+    except urllib.error.HTTPError as error:
+        raise LLMError(f"The server answered with status {error.code}.") from error
+    except (urllib.error.URLError, TimeoutError, json.JSONDecodeError) as error:
+        raise LLMError(f"Could not get a reply from {url}: {error}") from error
+
+
 class OllamaClient:
     def __init__(self, base_url, model, transport=post_json):
         self.base_url = base_url.rstrip("/")

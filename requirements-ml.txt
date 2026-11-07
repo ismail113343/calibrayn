@@ -4,3 +4,4 @@ sentence-transformers>=3.0
 faiss-cpu>=1.8
 transformers>=4.44
 torch>=2.3
+datasets>=3.0
