@@ -13,6 +13,6 @@ def show_sidebar(workspace):
             st.caption("Privacy: your notes stay on this computer.")
         if client.name == "mock":
             st.warning(
-                "This is the offline demo model. It builds simple questions and answers from "
-                "your own sentences. Set LLM_PROVIDER in your .env file to use a real model."
+                "No language model is connected, so the offline model is answering. It builds "
+                "simple questions from your own sentences. Open Setup to connect a real model."
             )
