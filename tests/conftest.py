@@ -79,3 +79,26 @@ def docx_bytes():
 @pytest.fixture
 def pptx_bytes():
     return build_pptx
+
+
+@pytest.fixture
+def sample_env(tmp_path, monkeypatch):
+    from calibrayn.config import Settings
+    from calibrayn.services.workspace import Workspace
+    from calibrayn.ui.components.samples import sample_files
+
+    values = {
+        "LLM_PROVIDER": "mock",
+        "EMBEDDER": "hashing",
+        "INDEX": "numpy",
+        "PRIVACY_MODE": "local",
+        "DATA_DIR": str(tmp_path / "data"),
+        "DATABASE_PATH": str(tmp_path / "data" / "sample.db"),
+    }
+    for name, value in values.items():
+        monkeypatch.setenv(name, value)
+    opened = Workspace.open(Settings())
+    for name, content in sample_files():
+        opened.add_document(name, content)
+    opened.close()
+    return tmp_path
