@@ -44,8 +44,40 @@ def in_sections(text):
     return LoadedFile("section", tuple(pages))
 
 
+FENCE = re.compile(r"^[ \t]*(?:```|~~~).*$", re.MULTILINE)
+HEADING = re.compile(r"^[ \t]{0,3}#{1,6}[ \t]+(.+?)[ \t]*#*[ \t]*$", re.MULTILINE)
+LIST_ITEM = re.compile(r"^[ \t]{0,6}(?:[-*+]|\d+[.)])[ \t]+(.+)$", re.MULTILINE)
+QUOTE = re.compile(r"^[ \t]{0,3}>[ \t]?", re.MULTILINE)
+IMAGE = re.compile(r"!\[([^\]]*)\]\([^)]*\)")
+LINK = re.compile(r"\[([^\]]+)\]\([^)]*\)")
+BOLD = re.compile(r"(\*\*|__)(.+?)\1")
+ITALIC = re.compile(r"(?<![\w*])([*_])(?!\s)(.+?)(?<!\s)\1(?![\w*])")
+CODE = re.compile(r"`([^`]*)`")
+
+
+def end_sentence(text):
+    stripped = text.strip()
+    return stripped if stripped[-1:] in ".!?:;" else stripped + "."
+
+
+def clean_markdown(text):
+    text = FENCE.sub("", text)
+    text = HEADING.sub(lambda match: end_sentence(match.group(1)), text)
+    text = LIST_ITEM.sub(lambda match: end_sentence(match.group(1)), text)
+    text = QUOTE.sub("", text)
+    text = IMAGE.sub(r"\1", text)
+    text = LINK.sub(r"\1", text)
+    text = BOLD.sub(r"\2", text)
+    text = ITALIC.sub(r"\2", text)
+    return CODE.sub(r"\1", text)
+
+
 def read_plain(content):
     return in_sections(content.decode("utf-8", errors="replace"))
+
+
+def read_markdown(content):
+    return in_sections(clean_markdown(content.decode("utf-8", errors="replace")))
 
 
 def read_pdf(content):
@@ -95,7 +127,7 @@ def read_pptx(content):
 READERS = {
     ".pdf": read_pdf,
     ".txt": read_plain,
-    ".md": read_plain,
+    ".md": read_markdown,
     ".docx": read_docx,
     ".pptx": read_pptx,
 }

@@ -188,7 +188,9 @@ with simulation_tab:
         )
         st.subheader("How much each learner remembers at the end")
         st.dataframe(table, hide_index=True)
-        st.bar_chart(table.set_index("Learner")[["Plain SM-2", "Adjusted"]], color=[BLUE, AMBER])
+        st.bar_chart(
+            table.set_index("Learner")[["Plain SM-2", "Adjusted"]], color=[BLUE, AMBER], stack=False
+        )
         st.caption("Low and High show the 95 percent range of the difference.")
 
         picked = st.selectbox(

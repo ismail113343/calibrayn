@@ -5,6 +5,7 @@ from calibrayn.ingestion.loaders import (
     NoTextFound,
     UnreadableFile,
     UnsupportedFile,
+    clean_markdown,
     in_sections,
     load_file,
 )
@@ -233,3 +234,58 @@ class TestPipeline:
         ingest(library, retriever, "b.txt", b"The Roman empire built long roads.")
         assert len(library.documents()) == 2
         assert len(retriever.index) == 2
+
+
+class TestMarkdown:
+    def test_a_heading_becomes_a_sentence_of_its_own(self):
+        assert clean_markdown("# Cells\n\nCells divide.") == "Cells.\n\nCells divide."
+
+    def test_every_heading_level_and_closing_hashes_are_removed(self):
+        assert clean_markdown("### Why it matters ###") == "Why it matters."
+        assert clean_markdown("## Why? ##") == "Why?"
+
+    def test_a_heading_keeps_its_own_punctuation(self):
+        assert clean_markdown("# Note:") == "Note:"
+
+    def test_emphasis_markers_are_removed(self):
+        assert clean_markdown("This is **very** and __truly__ so, *really* and _quite_.") == (
+            "This is very and truly so, really and quite."
+        )
+
+    def test_underscores_inside_words_are_left_alone(self):
+        assert clean_markdown("Use snake_case_name and 2*3*4 here.") == (
+            "Use snake_case_name and 2*3*4 here."
+        )
+
+    def test_links_images_and_code_keep_only_their_text(self):
+        text = "See [the docs](http://x.org) and ![a diagram](a.png) for `value`."
+        assert clean_markdown(text) == "See the docs and a diagram for value."
+
+    def test_list_items_become_separate_sentences(self):
+        assert clean_markdown("- first\n* second.\n1. third\n2) fourth") == (
+            "first.\nsecond.\nthird.\nfourth."
+        )
+
+    def test_quotes_lose_their_marker(self):
+        assert clean_markdown("> A quoted line\n> and more") == "A quoted line\nand more"
+
+    def test_code_fences_are_dropped_but_the_code_stays(self):
+        assert clean_markdown("```python\nx = 1\n```").strip() == "x = 1"
+
+    def test_plain_text_is_unchanged(self):
+        text = "Plain sentence one. Plain sentence two."
+        assert clean_markdown(text) == text
+
+    def test_markdown_files_are_cleaned_when_loaded(self):
+        loaded = load_file("notes.md", b"# Cells\n\n**Cells** divide.")
+        assert loaded.pages[0].text == "Cells.\n\nCells divide."
+
+    def test_text_files_are_not_treated_as_markdown(self):
+        assert load_file("notes.txt", b"# not a heading").pages[0].text == "# not a heading"
+
+    def test_a_markdown_file_gives_a_clean_topic_title(self, library, retriever):
+        _, chunks = ingest(
+            library, retriever, "bio.md", b"# Photosynthesis\n\nPhotosynthesis uses light."
+        )
+        assert chunks[0].title == "Photosynthesis."
+        assert "#" not in chunks[0].text
