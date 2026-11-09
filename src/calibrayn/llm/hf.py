@@ -60,7 +60,12 @@ class HuggingFaceLocalClient:
         if temperature > 0:
             options["temperature"] = temperature
         try:
-            output = self._load()(messages, **options)
+            try:
+                output = self._load()(messages, **options)
+            except RuntimeError as error:
+                if not options["do_sample"] or "probability tensor" not in str(error):
+                    raise
+                output = self._load()(messages, max_new_tokens=max_tokens, do_sample=False)
             text = output[0]["generated_text"][-1]["content"]
         except (IndexError, KeyError, TypeError) as error:
             raise LLMError("The local model sent a reply in an unexpected shape.") from error

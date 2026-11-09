@@ -573,3 +573,55 @@ class TestLocalGenerationOptions:
         monkeypatch.setitem(sys.modules, "transformers", SimpleNamespace(pipeline=self.make(seen)))
         HuggingFaceLocalClient("org/model").complete("s", "p", max_tokens=50, temperature=0.4)
         assert seen == {"max_new_tokens": 50, "do_sample": True, "temperature": 0.4}
+
+
+class TestLocalSamplingFallback:
+    BAD = "probability tensor contains either `inf`, `nan` or element < 0"
+
+    def make(self, calls, fail_with):
+        def fake_pipeline(task, model, token=None):
+            def generate(messages, **options):
+                calls.append(dict(options))
+                if options["do_sample"] and fail_with:
+                    raise RuntimeError(fail_with)
+                return [{"generated_text": [{"role": "assistant", "content": "Done."}]}]
+
+            return generate
+
+        return fake_pipeline
+
+    def test_a_failed_sampling_step_is_retried_without_sampling(self, monkeypatch):
+        calls = []
+        monkeypatch.setitem(
+            sys.modules, "transformers", SimpleNamespace(pipeline=self.make(calls, self.BAD))
+        )
+        reply = HuggingFaceLocalClient("org/model").complete(
+            "s", "p", max_tokens=50, temperature=0.2
+        )
+        assert reply == "Done."
+        assert calls[0]["do_sample"] is True
+        assert calls[1] == {"max_new_tokens": 50, "do_sample": False}
+
+    def test_a_different_runtime_error_is_not_hidden(self, monkeypatch):
+        calls = []
+        monkeypatch.setitem(
+            sys.modules, "transformers", SimpleNamespace(pipeline=self.make(calls, "out of memory"))
+        )
+        with pytest.raises(LLMError, match="out of memory"):
+            HuggingFaceLocalClient("org/model").complete("s", "p", temperature=0.2)
+        assert len(calls) == 1
+
+    def test_greedy_decoding_that_fails_is_not_retried(self, monkeypatch):
+        calls = []
+
+        def fake_pipeline(task, model, token=None):
+            def generate(messages, **options):
+                calls.append(options)
+                raise RuntimeError(self.BAD)
+
+            return generate
+
+        monkeypatch.setitem(sys.modules, "transformers", SimpleNamespace(pipeline=fake_pipeline))
+        with pytest.raises(LLMError):
+            HuggingFaceLocalClient("org/model").complete("s", "p", temperature=0.0)
+        assert len(calls) == 1
