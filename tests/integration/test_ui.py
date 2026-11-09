@@ -320,7 +320,7 @@ class TestUploadHelp:
         seed_samples()
         page = open_page("pages/1_Upload.py")
         assert len(page.expander) == 5
-        assert any("(photosynthesis.md, section 1)" in value for value in texts(page.markdown))
+        assert "Photosynthesis. (photosynthesis.md, section 1)" in texts(page.text)
 
 
 class TestChatHelp:
@@ -383,11 +383,23 @@ class TestQuizSummary:
         assert page.session_state["quiz_log"] == []
         assert page.radio
 
+    def test_extra_practice_is_explained_and_does_not_change_the_schedule(self):
+        seed()
+        page = open_page("pages/4_Quiz.py")
+        self.start_and_answer(page)
+        page.button(key="next_question").click().run()
+        key = page.session_state["quiz_asked"].question.answer_key
+        page.radio[0].set_value("Sure").run()
+        page.text_area[0].set_value(key).run()
+        page.button(key="submit_answer").click().run()
+        assert not page.exception
+        assert any("extra practice" in value for value in texts(page.caption))
+
     def test_the_sidebar_tracks_the_session(self):
         seed()
         page = open_page("pages/4_Quiz.py")
         self.start_and_answer(page)
-        assert any("This session: 1 answers" in value for value in texts(page.sidebar.markdown))
+        assert any("This session: 1 answer" in value for value in texts(page.sidebar.markdown))
 
 
 class TestDashboardHelp:
@@ -481,6 +493,17 @@ class TestEvaluationPage:
         table = page.dataframe[0].value
         assert table["Learner"].tolist() == ["steady", "overconfident"]
         assert {"Plain SM-2", "Adjusted", "Difference", "Low", "High"} <= set(table.columns)
+
+    def test_the_simulation_bars_sit_side_by_side_and_are_not_stacked(self):
+        page = open_page("console/pages/2_Evaluation.py")
+        page.multiselect(key="sim_personas").set_value(["steady", "overconfident"])
+        page.slider(key="sim_days").set_value(14)
+        page.slider(key="sim_seeds").set_value(3)
+        page.slider(key="sim_topics").set_value(10)
+        page.button(key="sim_run").click().run()
+        spec = json.loads(page.get("vega_lite_chart")[0].proto.spec)
+        assert "xOffset" in spec["encoding"]
+        assert spec["encoding"]["y"].get("stack") is False
 
     def test_the_simulation_cannot_run_with_no_learners(self):
         page = open_page("console/pages/2_Evaluation.py")

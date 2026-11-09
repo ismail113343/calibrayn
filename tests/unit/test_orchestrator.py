@@ -8,7 +8,13 @@ from calibrayn.llm.mock import MockClient
 from calibrayn.models.calibration import CalibrationState, Confidence
 from calibrayn.models.documents import ChunkDraft
 from calibrayn.models.learning import Support
-from calibrayn.orchestrator.agent import NothingToStudy, StaleQuestion, StudyAgent, grade_for
+from calibrayn.orchestrator.agent import (
+    EXTRA_PRACTICE,
+    NothingToStudy,
+    StaleQuestion,
+    StudyAgent,
+    grade_for,
+)
 from calibrayn.orchestrator.cognitive_load import LoadEstimate, LoadLevel
 from calibrayn.orchestrator.metacognition import Intervention
 from calibrayn.orchestrator.policy import AgentConfig, make_plan
@@ -152,6 +158,34 @@ class TestSelector:
     def test_ties_follow_reading_order(self):
         schedules = {1: due(30), 2: due(30)}
         assert choose_chunk([2, 1], schedules, NOW) == 2
+
+
+class TestExtraPracticeRotation:
+    def waiting(self):
+        later = Schedule(repetitions=1, due_at=NOW + timedelta(days=1))
+        sooner = Schedule(repetitions=1, due_at=NOW + timedelta(hours=1))
+        return {1: sooner, 2: later, 3: later}
+
+    def test_with_nothing_recent_the_soonest_topic_is_chosen(self):
+        assert choose_chunk([1, 2, 3], self.waiting(), NOW) == 1
+
+    def test_a_topic_asked_a_moment_ago_is_skipped(self):
+        assert choose_chunk([1, 2, 3], self.waiting(), NOW, recent=(1,)) == 2
+
+    def test_the_soonest_of_the_rested_topics_is_chosen(self):
+        waiting = self.waiting()
+        waiting[3] = Schedule(repetitions=1, due_at=NOW + timedelta(hours=3))
+        assert choose_chunk([1, 2, 3], waiting, NOW, recent=(1,)) == 3
+
+    def test_when_every_topic_was_recent_the_one_asked_longest_ago_is_chosen(self):
+        assert choose_chunk([1, 2, 3], self.waiting(), NOW, recent=(2, 3, 1)) == 2
+
+    def test_recent_topics_that_were_removed_are_ignored(self):
+        assert choose_chunk([1, 2], self.waiting(), NOW, recent=(99, 1, 2)) == 1
+
+    def test_due_topics_still_come_before_rotation(self):
+        schedules = {1: due(5), 2: Schedule(repetitions=1, due_at=NOW + timedelta(days=1))}
+        assert choose_chunk([1, 2], schedules, NOW, recent=(1,)) == 1
 
 
 class TestGradeFor:
@@ -404,3 +438,92 @@ class TestStaleQuestions:
         fresh = agent.ask()
         outcome = agent.answer(fresh, fresh.question.answer_key, SURE, 5.0)
         assert outcome.correct
+
+
+class TestExtraPractice:
+    def learn_everything(self, agent, clock, answer="key"):
+        for _ in range(3):
+            study(agent, clock, answer, step={"minutes": 1})
+
+    def test_a_topic_that_is_not_due_is_marked_as_extra_practice(self, agent, clock):
+        self.learn_everything(agent, clock)
+        asked = agent.ask()
+        assert asked.plan.reasons[-1] == EXTRA_PRACTICE
+
+    def test_a_topic_that_is_due_is_not_marked(self, agent, clock):
+        self.learn_everything(agent, clock)
+        clock.advance(days=2)
+        assert EXTRA_PRACTICE not in agent.ask().plan.reasons
+
+    def test_a_new_topic_is_not_marked(self, agent):
+        assert EXTRA_PRACTICE not in agent.ask().plan.reasons
+
+    def test_a_correct_early_answer_leaves_the_schedule_unchanged(self, agent, parts, clock):
+        self.learn_everything(agent, clock)
+        asked = agent.ask()
+        before = parts["progress"].schedule_for(asked.chunk.id)
+        outcome = agent.answer(asked, asked.question.answer_key, SURE, 5.0)
+        assert not outcome.counted
+        assert outcome.schedule == before
+        assert parts["progress"].schedule_for(asked.chunk.id) == before
+
+    def test_the_early_answer_is_still_recorded(self, agent, parts, clock):
+        self.learn_everything(agent, clock)
+        asked = agent.ask()
+        agent.answer(asked, asked.question.answer_key, SURE, 5.0)
+        assert parts["progress"].attempt_count() == 4
+
+    def test_many_early_answers_never_stretch_the_intervals(self, agent, parts, clock):
+        self.learn_everything(agent, clock)
+        before = {key: value.due_at for key, value in parts["progress"].schedules().items()}
+        for _ in range(12):
+            study(agent, clock, "key", step={"minutes": 1})
+        after = {key: value.due_at for key, value in parts["progress"].schedules().items()}
+        assert after == before
+
+    def test_a_wrong_early_answer_still_counts_as_a_failure(self, agent, parts, clock):
+        self.learn_everything(agent, clock)
+        asked = agent.ask()
+        outcome = agent.answer(asked, "bananas are yellow", SURE, 5.0)
+        assert outcome.counted
+        assert outcome.schedule.is_relearning
+        assert outcome.schedule.due_at == clock() + timedelta(minutes=10)
+
+    def test_an_answer_that_is_due_counts_normally(self, agent, clock):
+        self.learn_everything(agent, clock)
+        clock.advance(days=2)
+        asked = agent.ask()
+        outcome = agent.answer(asked, asked.question.answer_key, SURE, 5.0)
+        assert outcome.counted
+        assert outcome.schedule.repetitions == 2
+
+    def test_a_topic_being_relearned_is_not_advanced_by_an_early_correct_answer(
+        self, agent, parts, clock
+    ):
+        self.learn_everything(agent, clock, answer="bananas are yellow")
+        asked = agent.ask()
+        before = parts["progress"].schedule_for(asked.chunk.id)
+        assert before.is_relearning
+        outcome = agent.answer(asked, asked.question.answer_key, SURE, 5.0)
+        assert not outcome.counted
+        assert outcome.schedule == before
+
+
+class TestExtraPracticeInTheAgent:
+    def test_extra_practice_cycles_through_the_topics(self, agent, clock):
+        for _ in range(3):
+            study(agent, clock, "key", step={"minutes": 1})
+        seen = []
+        for _ in range(6):
+            asked, _ = study(agent, clock, "key", step={"minutes": 1})
+            seen.append(asked.chunk.id)
+        assert len(set(seen[:3])) == 3
+        assert seen[:3] == seen[3:]
+
+    def test_the_rotation_forgets_a_topic_that_is_removed(self, agent, parts, clock):
+        for _ in range(3):
+            study(agent, clock, "key", step={"minutes": 1})
+        first = agent.ask()
+        parts["library"].delete_document(first.chunk.document_id)
+        agent.reload()
+        assert agent.recent == []

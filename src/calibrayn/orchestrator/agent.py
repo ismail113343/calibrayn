@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta
 
 from calibrayn.models.calibration import CalibrationState, Confidence
@@ -17,6 +17,10 @@ from calibrayn.scheduler.ease_adjuster import adjust_for_confidence
 from calibrayn.scheduler.sm2 import Schedule, is_due, next_schedule
 
 HISTORY_LIMIT = 300
+EXTRA_PRACTICE = (
+    "Nothing is due right now, so this is extra practice. A correct answer will not change "
+    "the schedule."
+)
 
 
 class NothingToStudy(Exception):
@@ -48,6 +52,7 @@ class Outcome:
     load: LoadEstimate
     level: int
     queued_recall: bool
+    counted: bool = True
 
 
 @dataclass(frozen=True)
@@ -85,6 +90,7 @@ class StudyAgent:
         self.reload()
 
     def reload(self):
+        self.recent = []
         history = self.progress.attempts(limit=HISTORY_LIMIT)
         stored = self.progress.get_state("level")
         level = int(stored) if stored else self.tuning.zpd.start_level
@@ -152,10 +158,14 @@ class StudyAgent:
             self.zpd.set_level(plan.level)
             self.progress.set_state("level", plan.level)
 
-        chosen = choose_chunk(
-            [chunk.id for chunk in chunks], self.progress.schedules(), moment, recalls
-        )
+        schedules = self.progress.schedules()
+        order = [chunk.id for chunk in chunks]
+        chosen = choose_chunk(order, schedules, moment, recalls, tuple(self.recent))
+        self.recent = [*(item for item in self.recent if item != chosen), chosen][-len(order) :]
         chunk = by_id[chosen]
+        waiting = schedules.get(chosen)
+        if waiting is not None and not is_due(waiting, moment) and chosen not in recalls:
+            plan = replace(plan, reasons=(*plan.reasons, EXTRA_PRACTICE))
         generated = self.writer.question(chunk, plan.level, plan.support)
         example = ""
         if plan.support is Support.WORKED_EXAMPLE:
@@ -185,12 +195,16 @@ class StudyAgent:
         self.meta.record(confidence, correct)
         reading = self.meta.reading()
 
-        schedule = next_schedule(
-            self.progress.schedule_for(question.chunk_id), grade, moment, self.tuning.sm2
-        )
-        schedule = adjust_for_confidence(
-            schedule, confidence, correct, reading.state, self.tuning.ease
-        )
+        current = self.progress.schedule_for(question.chunk_id)
+        early = current is not None and not is_due(current, moment)
+        counted = not (early and grade >= self.tuning.sm2.pass_grade)
+        if counted:
+            schedule = next_schedule(current, grade, moment, self.tuning.sm2)
+            schedule = adjust_for_confidence(
+                schedule, confidence, correct, reading.state, self.tuning.ease
+            )
+        else:
+            schedule = current
         self.progress.save_schedule(question.chunk_id, schedule)
         self.progress.record_attempt(
             Attempt(
@@ -234,4 +248,5 @@ class StudyAgent:
             load=self.load.estimate(self.session_minutes(moment)),
             level=level,
             queued_recall=queued,
+            counted=counted,
         )

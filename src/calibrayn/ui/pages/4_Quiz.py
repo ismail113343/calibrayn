@@ -73,7 +73,8 @@ with st.sidebar:
     st.write(describe_calibration(snapshot.calibration, needed))
     if log:
         average = sum(entry["score"] for entry in log) / len(log)
-        st.write(f"This session: {len(log)} answers, average {average:.0%}.")
+        noun = "answer" if len(log) == 1 else "answers"
+        st.write(f"This session: {len(log)} {noun}, average {average:.0%}.")
 
 if state.get("quiz_notice"):
     st.info(state["quiz_notice"])
@@ -140,6 +141,8 @@ elif stage == "feedback":
 
     when = describe_next_review(outcome.schedule, workspace.clock())
     st.write(f"You will see this topic again {when}.")
+    if not outcome.counted:
+        st.caption("This was extra practice, so the schedule did not change.")
     st.caption(describe_calibration(outcome.calibration, needed))
     if outcome.level != asked.question.level:
         direction = "up" if outcome.level > asked.question.level else "down"

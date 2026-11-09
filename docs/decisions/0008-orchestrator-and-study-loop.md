@@ -24,6 +24,11 @@ the orchestrator decides the next topic, difficulty and kind of help.
 - When the student is overconfident and answers a sure question wrongly, that topic is queued for
   a recall after 30 minutes.
 - After each answer the ZPD tracker may move the level. A move clears its history.
+- A topic that is not yet due can still be asked when nothing else is due. This is extra practice.
+  A correct answer is recorded but leaves the schedule unchanged, because counting it would
+  stretch the intervals after a single sitting. A wrong answer counts as a failure as usual. The
+  plan says when a question is extra practice. This rule was added after a demonstration session
+  produced an interval of more than three years.
 
 ## Why
 

@@ -58,4 +58,4 @@ for document in documents:
         st.rerun()
     with st.expander("Show topics"):
         for chunk in chunks:
-            st.write(f"{chunk.title} ({workspace.citation(chunk)})")
+            st.text(f"{chunk.title} ({workspace.citation(chunk)})")
